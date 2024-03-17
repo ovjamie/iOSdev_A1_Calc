@@ -12,12 +12,12 @@
 
 import Foundation
 
-var args = ProcessInfo.processInfo.arguments; //an array of strings representing the command-line arguments; each element                                               of the array represents a single command-line argument.
+var args = ProcessInfo.processInfo.arguments; //an array of strings representing the command-line arguments; each element of the array represents a single command-line argument.
 args.removeFirst(); // remove the name of the program
 
 //print(args); //testing
 
-//separate args into numbers and operators
+// function to separate args into numbers and operators
 func processArgs(_ args:[String]) -> ([Int], [String]){
     var numbers = [Int]();
     var operators = [String]();
@@ -41,29 +41,39 @@ func processArgs(_ args:[String]) -> ([Int], [String]){
     return (numbers, operators);
 }
 
+// class HandleErrors contains functions that identify and handle errors
 class HandleErrors{
     
     let validOperators:[String] = ["+", "-", "x", "/", "%"];
     
     //checks if command line arguments are valid
-    func isArgsValid(_ args:[String]) -> Bool{
+    func isArgsValid(_ args:[String], numbers:[Int], operators:[String]) -> Bool{
         guard args.count > 0 else{
             return false;
         }
-//        guard let _ = Int(args[0]), let _ = Int(args[args.count - 1]) else{
-//            return false;
-//        }
-        guard let _ = Int(args[0]) else{
+        
+        guard !(validOperators.contains(args[0])) else{
             return false;
         }
-//        guard args.allSatisfy({Int($0) != nil || validOperators.contains($0)}) else{
-//            return false;
-//        }
-
-        //checks if input follows format: [number operator number ...]
-        for i in stride(from: 1, to: (args.count) - 1, by: 2){
-            if args[i].count != 1 || Int(args[i + 1]) == nil || !validOperators.contains(args[i]){
-                return false;
+        
+        guard numbers.count > operators.count else{
+            return false;
+        }
+        
+        if operators.count > 0 {
+            //checks if input follows format: [number operator number ...]
+            for i in stride(from: 1, to: (args.count) - 1, by: 2){
+                if args[i].count != 1 || !validOperators.contains(args[i]){
+                    return false;
+                }
+            }
+            
+            for j in stride(from: 0, to: (args.count) - 1, by: 2){
+                if(args[j].starts(with: "-") || args[j].starts(with: "+")){
+                    if Int(args[j].suffix(from: args[j].index(after: args[j].startIndex))) == nil || Int(args[j]) == nil{
+                        return false;
+                    }
+                }
             }
         }
         
@@ -71,57 +81,52 @@ class HandleErrors{
     }
     
     //checks division by zero errors
-    func checkDivByZero(_ args:[String]) -> Bool{
-        for i in stride(from: 1, to: (args.count) - 1, by: 2){
-            if (args[i] == "%" || args[i] == "/") && Int(args[i + 1]) == 0{
-                return true;
+    func checkDivByZero(numbers:[Int], operators:[String]) -> Bool{
+        for i in 0...(operators.count - 1){
+            if "%/".contains(operators[i]){
+                if numbers[i + 1] == 0{
+                    return true;
+                }
             }
         }
         return false; //no division by zero
     }
-    
+
 }
 
+// class Calculator contains functions that evaluate the given expression
 class Calculator{
     func evaluate(numbers:[Int], operators:[String]) -> Int{
         var result:Int = 0;
         var numbersCopy = numbers;
         var operatorsCopy = operators;
-         
+        
         guard operators.count > 1 else{
             let oneOperation = self.solve(operators[0], numbers[0], numbers[1]);
             return oneOperation;
         }
-        guard !(operators.isEmpty) && numbers.count > 1 else{
-            return numbers[0];
-        }
-
-        while operatorsCopy.count > 0{
-            for i in 0...(operatorsCopy.count - 1){
-                if "x%/".contains(operatorsCopy[i]){
-                    result = self.solve(operatorsCopy[i], numbersCopy[i], numbersCopy[i + 1]);
-                    operatorsCopy.remove(at: i);
-                    numbersCopy.remove(at: i + 1);
-                    numbersCopy.remove(at: i);
-                    numbersCopy.insert(result, at: i);
-                }
+        
+        var index:Int = 0;
+        
+        while index < operatorsCopy.count{
+            if operatorsCopy[index] == "/" || operatorsCopy[index] == "x" || operatorsCopy[index] == "%"{
+                let solve = self.solve(operatorsCopy[index], numbersCopy[index], numbersCopy[index + 1]);
+                numbersCopy.remove(at: index);
+                numbersCopy.remove(at: index);
+                numbersCopy.insert(solve, at: index);
+                operatorsCopy.remove(at: index);
+            }else{
+                index += 1;
             }
 
-            if !(operatorsCopy.contains("%/x")){
-                while numbersCopy.count > 1{
-                    result = self.solve(operatorsCopy[0], numbersCopy[0], numbersCopy[1]);
-                    operatorsCopy.remove(at: 0);
-                    numbersCopy.remove(at: 1);
-                    numbersCopy.remove(at: 0);
-                    numbersCopy.insert(result, at: 0);
-                }
-            }
-            
         }
+        
+        result = self.leftToRight(numbers: numbersCopy, operators: operatorsCopy);
 
-        return numbersCopy[0];
+        return result;
     }
 
+    // 'solve' function prevents repeating code
     func solve(_ op: String, _ x:Int, _ y:Int) -> Int{
         switch op{
             case "+":
@@ -131,21 +136,31 @@ class Calculator{
             case "x":
                 return x * y;
             case "/":
-                if x == 0{
-                    return 0;
-                }else{
-                    return x / y;
-                }
+                return x / y;
             case "%":
-                if x == 0{
-                    return 0;
-                }else{
-                    return x % y;
-                }
+                return x % y;
             default:
                 return 0;
         }
     }
+    
+    // 'leftToRight' function prevents repeating code and makes sure the expression is evaluated from left to right
+    func leftToRight(numbers:[Int], operators:[String]) -> Int{
+        var numbersCopy = numbers;
+        var operatorsCopy = operators;
+        
+        while(numbersCopy.count > 1){
+            let result:Int;
+            result = self.solve(operatorsCopy[0], numbersCopy[0], numbersCopy[1]);
+            operatorsCopy.remove(at: 0);
+            numbersCopy.remove(at: 1);
+            numbersCopy.remove(at: 0);
+            numbersCopy.insert(result, at: 0);
+        }
+        
+        return numbersCopy[0];
+    }
+    
 }
 
 func main(){
@@ -153,84 +168,72 @@ func main(){
     let errorHandling = HandleErrors();
     let calculator = Calculator();
     
-    //checks if command line arguments are valid and no division by zero occurs
-    guard errorHandling.isArgsValid(args) else{
+    // checks if args is just a single integer
+    guard numbers.count >= 1 && operators.count > 0 else{
+        print(numbers[0]);
+        exit(1);
+    }
+    // checks if command line arguments are valid and no division by zero occurs
+    guard errorHandling.isArgsValid(args, numbers:numbers, operators:operators) else{
         print("Incomplete or invalid expression. Expected input: [number operator number ...]");
         exit(1);
     }
-    guard !(errorHandling.checkDivByZero(args)) else{
+    guard !(errorHandling.checkDivByZero(numbers: numbers, operators: operators)) else{
         print("Division by zero");
         exit(1);
     }
     
+    // actually find the result of the given expression
     let result = calculator.evaluate(numbers: numbers, operators: operators);
-    
-    guard !(result > Int.max || result < Int.min) else{
-        print("Out of bounds");
-        exit(1);
-    }
     
     print(result);
 
 }
 
 main();
-    
-//
-//Specs:
 
-//You are to prepare a macOS command-line tool that will act as a simple calculator. The calculator will be run from the command line and will only work with integer numbers and the following arithmetic operators: `+` `-` `x` `/` `%`. The `%` operator is the modulus operator, not percentage.
+//**Max score**: 25 marks
 //
-//For example, if the program is compiled to `calc`:
+//#### Functionality: 16 marks
 //
-//    ./calc 3 + 5 - 7
-//    1
+//The Xcode project must unzip successfully and compile without errors.
 //
-//In the command line, the arguments are a repeated sequence in the form
+//- Deduct 3 marks if there are **any** compiler warnings.
 //
-//    number operator
+//- Deduct 1 mark for **each** failing test in the `CalcTest` suite.
 //
-//and ending in a
+//  ​
 //
-//    number
+//#### Style: 3 marks
 //
-//Hitting the enter key will cause the program to evaluate the arguments and print the result. In this case `1`.
+//- Deduct up to 1 mark for bad or inconsistent indentation, whitespace, or braces.
+//- Deduct up to 1 mark for bad or misleading comments.
+//- Deduct up to 1 mark for unclear symbol naming.
 //
-//The program must follow the usual rules of arithmetic which say:
+//#### Design: 6 marks
 //
-//1. The `x` `/` and `%` operators must all be evaluated before the `+` and `–` operators.
-//2. Operators must be evaluated from left to right.
+//- **Functional separation**
+//    - Is the problem broken down into functions, classes and different files?
+//    - Is each class addressing a meaningful problem domain?
+//    - An example of **bad** functional separation: Everything in one big file with very large functions and many global variables.
+//- **Loose coupling**
+//    - Can parts of the code base be modified in isolation? Would changing one portion require significant changes throughout the code base?
+//    - Is data passed between components in a structured way?
+//    - An example of **good** loose coupling is when functionality can be re-used in multiple components and potentially different projects.
 //
-//For example, using Rule 1
+//- **Extensibility**
+//    - Would it be easy to add more functionality? (more operations, more numerical accuracy, interactivity, variables, etc)
+//    - Can extra functionality be added to the program with minimal changes. Such as supporting different levels of precedence?
+//    - **Bad** extensibility would involve many hard-coded strings that are used in multiple places.
 //
-//> 2 + 4 x 3 – 6
+//- **Control flow**
+//    - Are all actions of the same type handled at the same level?
+//    - Can another developer understand the logic flow of your program by reading the main entry point?
+//    - **Bad** control flow could be caused by exiting the program outside of the main routine.
 //
-//becomes
+//- **Error handling**
+//    - Are errors detected at appropriate places? Can they be collected somewhere central?
+//    - Are errors correctly thrown and caught? Are they appropriately handled in the main routine?
+//    - Is the user presented with meaningful errors when they do something incorrectly such as providing invalid input?
 //
-//> 2 + 12 – 6
-//
-//which results in
-//
-//> 8
-//
-//If we did not use Rule 1 then `2 + 4 x 3 – 6` would become `6 x 3 – 6` and then `18 – 6` and finally `12`. This is an incorrect result.
-//
-//If we do not use Rule 2 then the following illustrates how it can go wrong
-//
-//> 4 x 5 % 2
-//
-//Going from left to right we evaluate the `x` first, which reduces the expression to `20 % 2` which becomes `0`. If we evaluated the `%` first then the expression would reduce to `4 x 1` which becomes `4`. This is an incorrect result.
-//
-//Remember, we are using integer mathematics when doing our calculations, so we get integer results when doing division. For example
-//
-//    ./calc 20 / 3
-//    6
-//
-//Also note that we can use the unary `+` and `–` operators. For example
-//
-//    ./calc -5 / +2
-//    -2
-//    
-//    ./calc +2 - -2
-//    4
-//As part of your program design, it is expected you will create classes to model the problem domain.
+//- **Marker's discretion**
